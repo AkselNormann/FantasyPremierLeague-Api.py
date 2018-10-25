@@ -2,6 +2,8 @@ import requests
 import json
 import csv
 import argparse
+import pandas as pd
+import unicodedata
 
 FPL_URL = "https://fantasy.premierleague.com/drf/"
 USER_SUMMARY_SUBURL = "element-summary/"
@@ -67,7 +69,7 @@ def getAllPlayersDetailedJson():
 def writeToFile(countOfplayersPicked, fileName):
     with open(fileName, 'w') as out:
         csv_out = csv.writer(out)
-        csv_out.writerow(['name', 'num'])
+        csv_out.writerow(['name', 'count'])
         for row in countOfplayersPicked:
             csv_out.writerow(row)
 
@@ -83,7 +85,7 @@ getPlayersInfo()
 playerElementIdToNameMap = {}
 allPlayers = getAllPlayersDetailedJson()
 for element in allPlayers["elements"]:
-    playerElementIdToNameMap[element["id"]] = element["web_name"].encode('ascii', 'ignore')
+    playerElementIdToNameMap[element["id"]] = unicodedata.normalize('NFD', element["first_name"] + ' ' + element["second_name"]).encode('ascii', 'ignore').strip()
 
 countOfplayersPicked = {}
 countOfCaptainsPicked = {}
@@ -107,29 +109,37 @@ while (True):
             break
 
         totalNumberOfPlayersCount += len(entries)
-        print("parsing pageCount: " + str(pageCount) + " with total number of players so far:" + str(
+        print("parsing pageCount: " + str(pageCount) + " with total number of players so far: " + str(
             totalNumberOfPlayersCount))
         for entry in entries:
             elements, captainId = getplayersPickedForEntryId(entry, GWNumber)
             for element in elements:
-                name = playerElementIdToNameMap[element]
+                name = str(playerElementIdToNameMap[element],'utf-8')
                 if name in countOfplayersPicked:
                     countOfplayersPicked[name] += 1
                 else:
                     countOfplayersPicked[name] = 1
 
-            captainName = playerElementIdToNameMap[captainId]
+            captainName = str(playerElementIdToNameMap[captainId],'utf-8')
             if captainName in countOfCaptainsPicked:
                 countOfCaptainsPicked[captainName] += 1
             else:
                 countOfCaptainsPicked[captainName] = 1
 
         listOfcountOfplayersPicked = sorted(countOfplayersPicked.items(), key=lambda x: x[1], reverse=True)
-        writeToFile(listOfcountOfplayersPicked, "result playersPicked " + str(leagueIdSelected) + ".csv")
+        writeToFile(listOfcountOfplayersPicked, "picked_" + str(leagueIdSelected) + "_gw" + str(GWNumber) + ".csv")
         listOfCountOfCaptainsPicked = sorted(countOfCaptainsPicked.items(), key=lambda x: x[1], reverse=True)
-        writeToFile(listOfCountOfCaptainsPicked, "result captain " + str(leagueIdSelected) + ".csv")
+        writeToFile(listOfCountOfCaptainsPicked, "captain_" + str(leagueIdSelected) + "_gw" + str(GWNumber) + ".csv")
 
         pageCount += 1
-    except Exception, e:
-        print str(e)
+    except Exception as e:
+        print(e)
         pass
+
+picked = pd.read_csv("picked_" + str(leagueIdSelected) + "_gw" + str(GWNumber) + ".csv")
+picked['percent'] = picked['count'] / totalNumberOfPlayersCount
+picked.to_csv("picked_" + str(leagueIdSelected) + "_gw" + str(GWNumber) + ".csv", index=False)
+
+captain = pd.read_csv("captain_" + str(leagueIdSelected) + "_gw" + str(GWNumber) + ".csv")
+captain['percent'] = captain['count'] / totalNumberOfPlayersCount
+captain.to_csv("captain_" + str(leagueIdSelected) + "_gw" + str(GWNumber) + ".csv", index=False)
